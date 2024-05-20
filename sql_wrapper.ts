@@ -60,7 +60,7 @@ export class IWrapper {
 			}
 			columns.reverse();
 			
-			let insertColumns_queryParams: string = insertAfter  ? ` AFTER ${insertAfter}` : "";
+			let insertColumns_queryParams: string = insertAfter  ? ` AFTER \`${insertAfter}\`` : "";
 			if (insertBefore) {
 				const columns: string[] = await this.getColumns(tableName);
 				let insertAfter_found;
@@ -68,7 +68,7 @@ export class IWrapper {
 					const column: string = columns[columnIndex];
 					if (column === insertBefore) {
 						insertAfter_found = columns[columnIndex - 1];
-						insertColumns_queryParams = insertAfter_found  ? ` AFTER ${insertAfter_found}` : "";
+						insertColumns_queryParams = insertAfter_found ? ` AFTER \`${insertAfter_found}\`` : "";
 						break;
 					}
 				}
