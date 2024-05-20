@@ -102,9 +102,10 @@ export class IWrapper {
 				valuesArray.push(`(${params_csv})`);
 				execValues.push(...value);
 			} else {
-				for (const valueIndex in value) value[valueIndex] = mysql_real_escape_string(value[valueIndex]);
-				const value_csv: string = value.join("', '");
-				valuesArray.push(`('${value_csv}')`); // if noParams is true, all values will be considered strings.
+				const sanitizedValue: string[] = [];
+				for (const unsafeValue of value) sanitizedValue.push(mysql_real_escape_string(unsafeValue.toString()));
+				const sanitizedValue_csv: string = sanitizedValue.join("', '");
+				valuesArray.push(`('${sanitizedValue_csv}')`); // if noParams is true, all values will be considered strings.
 			}
 		}
 		const valuesArray_csv: string = valuesArray.join(", ");
