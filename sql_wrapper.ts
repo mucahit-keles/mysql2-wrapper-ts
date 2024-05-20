@@ -58,7 +58,7 @@ export class IWrapper {
 				const column = columns[columnIndex];
 				columns[columnIndex] = mysql_real_escape_string(column);
 			}
-			columns.reverse();
+			columns.reverse(); // to fix reversed insertion of columns
 			
 			let insertColumns_queryParams: string = insertAfter  ? ` AFTER \`${insertAfter}\`` : "";
 			if (insertBefore) {
@@ -81,11 +81,34 @@ export class IWrapper {
 			throw new Error(e.message.replace("execute Exception:", "insertColumns Exception:"));
 		}
 	};
-	public async execute(query: string, params?: IQueryValue): Promise<number> {
+	public async execute(query: string, params?: IQueryValue[]): Promise<number> {
 		try {
 			return ((await dbConnection.execute(query, params))[0] as ResultSetHeader).insertId;
 		} catch (e: any) {
 			throw new Error(`execute Exception: ${e.message}`)
 		}
+	};
+	public async insertRows(tableName: string, columns: string[], values: Array<(string | number | Date)[]>, noParams: boolean = false): Promise<void> {
+		if (!Array.isArray(values)) values = [ values ];
+		tableName = mysql_real_escape_string(tableName);
+		const columns_csv: string = columns.join("`, `");
+		const execValues: (string | number | Date)[] = [];
+		
+		const valuesArray: string[] = [];
+		for (const value of values) {
+			if (!noParams) {
+				const params: Array<"?"> = new Array(value.length).fill("?");
+				const params_csv: string = params.join(", ");
+				valuesArray.push(`(${params_csv})`);
+				execValues.push(...value);
+			} else {
+				for (const valueIndex in value) value[valueIndex] = mysql_real_escape_string(value[valueIndex]);
+				const value_csv: string = value.join("', '");
+				valuesArray.push(`('${value_csv}')`); // if noParams is true, all values will be considered strings.
+			}
+		}
+		const valuesArray_csv: string = valuesArray.join(", ");
+		
+		await this.execute(`INSERT INTO \`${tableName}\` (\`${columns_csv}\`) VALUES ${valuesArray_csv}`, !noParams ? execValues : undefined);
 	};
 }
