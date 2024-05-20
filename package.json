@@ -1,0 +1,13 @@
+{
+	"name": "mysql2-wrapper-ts",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"dependencies": {
+		"mysql2": "^3.9.7"
+	},
+	"devDependencies": {
+		"typescript": "^5.4.5",
+		"@types/node": "^20.12.12"
+	}
+}
