@@ -68,12 +68,10 @@ export class IWrapper {
 			throw new Error(`execute Exception: ${e.message}`)
 		}
 	};
-	public insertColumn = this.insertColumns;
-	public async insertColumns(tableName: string, columns: string[] | string, insertAfter?: string, insertBefore?: string): Promise<void> {
+	public async insertColumns(tableName: string, columns: string[], insertAfter?: string, insertBefore?: string): Promise<void> {
 		try {
 			tableName = mysql_real_escape_string(tableName);
 			
-			if (typeof columns === "string") columns = [ columns ];
 			for (let columnIndex: number = 0; columnIndex < columns.length; columnIndex++) {
 				const column = columns[columnIndex];
 				columns[columnIndex] = mysql_real_escape_string(column);
@@ -101,10 +99,14 @@ export class IWrapper {
 			throw new Error(e.message.replace("execute Exception:", "insertColumns Exception:"));
 		}
 	};
-	public async insertRow(tableName: string, columns: string[], values: (string | number | Date)[], noParams: boolean = false): Promise<void> {
-		this.insertRows(tableName, columns, [ values ], noParams);
+	public async insertColumn(tableName: string, column: string, insertAfter?: string, insertBefore?: string): Promise<void> {
+		try {
+			await this.insertColumns(tableName, [ column ], insertAfter, insertBefore);
+		} catch (e: any) {
+			throw new Error(e.message.replace("insertColumns Exception:", "insertColumn Exception:"));
+		}
 	};
-	public async insertRows(tableName: string, columns: string[], values: Array<(string | number | Date)[]>, noParams: boolean = false): Promise<void> {
+	public async insertRows(tableName: string, columns: string[], values: Array<(string | number | Date)[]>, noParams: boolean = false): Promise<number> {
 		try {
 			tableName = mysql_real_escape_string(tableName);
 			const columns_csv: string = columns.join("`, `");
@@ -124,9 +126,16 @@ export class IWrapper {
 			}
 			const valuesArray_csv: string = valuesArray.join(", ");
 			
-			await this.execute(`INSERT INTO \`${tableName}\` (\`${columns_csv}\`) VALUES ${valuesArray_csv}`, !noParams ? execValues : undefined);
+			return await this.execute(`INSERT INTO \`${tableName}\` (\`${columns_csv}\`) VALUES ${valuesArray_csv}`, !noParams ? execValues : undefined);
 		} catch (e: any) {
 			throw new Error(e.message.replace("execute Exception:", "insertRows Exception:"));
+		}
+	};
+	public async insertRow(tableName: string, columns: string[], values: (string | number | Date)[], noParams: boolean = false): Promise<number> {
+		try {
+			return await this.insertRows(tableName, columns, [ values ], noParams);	
+		} catch (e: any) {
+			throw new Error(e.message.replace("insertRows Exception:", "insertRow Exception:"));
 		}
 	};
 }
