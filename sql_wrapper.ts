@@ -11,7 +11,8 @@ export async function getWrapper(connectionOptions: ConnectionOptions, timeZone?
 }
 
 type IQueryValue = string | number | Date;
-type IDBColumn = { Field: string };
+type IDBColumn = { Field: string; };
+type IInfoSchemaColumn = { COLUMN_NAME: string; };
 
 function mysql_real_escape_string(unsafeString: string): string {
 	const safeString: string = dbConnection.escape(unsafeString);
@@ -24,14 +25,6 @@ export class IWrapper {
 			return (await dbConnection.execute(query, params))[0] as RowDataPacket[];
 		} catch (e: any) {
 			throw new Error(`getData Exception: ${e.message}`);
-		}
-	};
-	public async getOneData(query: string, params?: IQueryValue[]): Promise<RowDataPacket | undefined> {
-		try {
-			const rows: RowDataPacket[] = await this.getData(`${query} LIMIT 1`, params);
-			return rows.length === 0 ? undefined : rows[0];
-		} catch (e: any) {
-			throw new Error(e.message.replace("getData Exception:", "getOneData Exception:"));
 		}
 	};
 	public async getColumns(tableName: string, excludedColumns?: string[]): Promise<string[]> {
@@ -49,6 +42,33 @@ export class IWrapper {
 			throw new Error(e.message.replace("getData Exception:", "getColumns Exception:"));
 		}
 	};
+	public async getOneData(query: string, params?: IQueryValue[]): Promise<RowDataPacket | undefined> {
+		try {
+			const rows: RowDataPacket[] = await this.getData(`${query} LIMIT 1`, params);
+			return rows.length === 0 ? undefined : rows[0];
+		} catch (e: any) {
+			throw new Error(e.message.replace("getData Exception:", "getOneData Exception:"));
+		}
+	};
+	public async getColumnByOffset(tableName: string, columnName: string, offset: number): Promise<string> {
+		try {
+			tableName = mysql_real_escape_string(tableName);
+			
+			const offsetString: string = `${offset >= 0 ? "+" : ""}${offset.toString()}`
+			
+			return (await this.getOneData(`SELECT \`COLUMN_NAME\` FROM information_schema.columns WHERE \`TABLE_NAME\` = $1 AND \`ORDINAL_POSITION\` = (SELECT \`ORDINAL_POSITION\` ${offsetString} FROM information_schema.columns WHERE \`TABLE_NAME\` = $1 AND \`COLUMN_NAME\` = $2)`, [ tableName, columnName ]) as IInfoSchemaColumn)["COLUMN_NAME"];
+		} catch (e: any) {
+			throw new Error(e.message.replace("getOneData Exception:", "getColumnByOffset Exception:"));
+		}
+	};
+	public async execute(query: string, params?: IQueryValue[]): Promise<number> {
+		try {
+			return ((await dbConnection.execute(query, params))[0] as ResultSetHeader).insertId;
+		} catch (e: any) {
+			throw new Error(`execute Exception: ${e.message}`)
+		}
+	};
+	public insertColumn = this.insertColumns;
 	public async insertColumns(tableName: string, columns: string[] | string, insertAfter?: string, insertBefore?: string): Promise<void> {
 		try {
 			tableName = mysql_real_escape_string(tableName);
@@ -63,7 +83,7 @@ export class IWrapper {
 			let insertColumns_queryParams: string = insertAfter  ? ` AFTER \`${insertAfter}\`` : "";
 			if (insertBefore) {
 				const columns: string[] = await this.getColumns(tableName);
-				let insertAfter_found: string;
+				let insertAfter_found;
 				for (let columnIndex: number = 0; columnIndex < columns.length; columnIndex++) {
 					const column: string = columns[columnIndex];
 					if (column === insertBefore) {
@@ -81,35 +101,32 @@ export class IWrapper {
 			throw new Error(e.message.replace("execute Exception:", "insertColumns Exception:"));
 		}
 	};
-	public async execute(query: string, params?: IQueryValue[]): Promise<number> {
-		try {
-			return ((await dbConnection.execute(query, params))[0] as ResultSetHeader).insertId;
-		} catch (e: any) {
-			throw new Error(`execute Exception: ${e.message}`)
-		}
+	public async insertRow(tableName: string, columns: string[], values: (string | number | Date)[], noParams: boolean = false): Promise<void> {
+		this.insertRows(tableName, columns, [ values ], noParams);
 	};
 	public async insertRows(tableName: string, columns: string[], values: Array<(string | number | Date)[]>, noParams: boolean = false): Promise<void> {
-		if (!Array.isArray(values)) values = [ values ];
-		tableName = mysql_real_escape_string(tableName);
-		const columns_csv: string = columns.join("`, `");
-		const execValues: (string | number | Date)[] = [];
-		
-		const valuesArray: string[] = [];
-		for (const value of values) {
-			if (!noParams) {
-				const params: Array<"?"> = new Array(value.length).fill("?");
-				const params_csv: string = params.join(", ");
-				valuesArray.push(`(${params_csv})`);
-				execValues.push(...value);
-			} else {
-				const sanitizedValue: string[] = [];
-				for (const unsafeValue of value) sanitizedValue.push(mysql_real_escape_string(unsafeValue.toString()));
-				const sanitizedValue_csv: string = sanitizedValue.join("', '");
-				valuesArray.push(`('${sanitizedValue_csv}')`); // if noParams is true, all values will be considered strings.
+		try {
+			tableName = mysql_real_escape_string(tableName);
+			const columns_csv: string = columns.join("`, `");
+			const execValues: (string | number | Date)[] = [];
+			
+			const valuesArray: string[] = [];
+			for (const value of values) {
+				if (!noParams) {
+					const params: Array<"?"> = new Array(value.length).fill("?");
+					const params_csv: string = params.join(", ");
+					valuesArray.push(`(${params_csv})`);
+					execValues.push(...value);
+				} else {
+					const value_csv: string = value.join("', '");
+					valuesArray.push(`('${value_csv}')`); // if noParams is true, all values will be considered strings.
+				}
 			}
+			const valuesArray_csv: string = valuesArray.join(", ");
+			
+			await this.execute(`INSERT INTO \`${tableName}\` (\`${columns_csv}\`) VALUES ${valuesArray_csv}`, !noParams ? execValues : undefined);
+		} catch (e: any) {
+			throw new Error(e.message.replace("execute Exception:", "insertRows Exception:"));
 		}
-		const valuesArray_csv: string = valuesArray.join(", ");
-		
-		await this.execute(`INSERT INTO \`${tableName}\` (\`${columns_csv}\`) VALUES ${valuesArray_csv}`, !noParams ? execValues : undefined);
 	};
 }
